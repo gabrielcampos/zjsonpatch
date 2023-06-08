@@ -23,6 +23,7 @@ import org.junit.runners.Parameterized;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.EnumSet;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertThat;
@@ -56,7 +57,18 @@ public class MoveOperationTest extends AbstractTest {
         JsonNode jsonNode2 = MAPPER.readTree("{ \"foo\": [ \"all\", \"cows\", \"eat\", \"grass\" ] }");
         JsonNode patch = MAPPER.readTree("[{\"op\":\"move\",\"from\":\"/foo/1\",\"path\":\"/foo/3\"}]");
 
-        JsonNode diff = JsonDiff.asJson(jsonNode1, jsonNode2);
+        JsonNode diff = JsonDiff.asJson(jsonNode1, jsonNode2, EnumSet.of(DiffFlags.OMIT_VALUE_ON_REMOVE));
+
+        assertThat(diff, equalTo(patch));
+    }
+
+    @Test
+    public void testMoveArrayGeneratedHasNoValueHasArrayItemTest() throws IOException {
+        JsonNode jsonNode1 = MAPPER.readTree("{ \"foo\": [ \"all\", \"grass\", \"cows\", \"eat\" ] }");
+        JsonNode jsonNode2 = MAPPER.readTree("{ \"foo\": [ \"all\", \"cows\", \"eat\", \"grass\" ] }");
+        JsonNode patch = MAPPER.readTree("[{\"op\":\"test\",\"path\":\"/foo/1\",\"value\":\"grass\"},{\"op\":\"move\",\"from\":\"/foo/1\",\"path\":\"/foo/3\"}]");
+
+        JsonNode diff = JsonDiff.asJson(jsonNode1, jsonNode2, EnumSet.of(DiffFlags.OMIT_VALUE_ON_REMOVE, DiffFlags.EMIT_ARRAY_ITEM_TEST_OPERATIONS));
 
         assertThat(diff, equalTo(patch));
     }
