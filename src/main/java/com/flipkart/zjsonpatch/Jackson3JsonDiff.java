@@ -36,8 +36,8 @@ public final class Jackson3JsonDiff extends AbstractJsonDiff {
 
     private static final JsonNodeFactoryWrapper FACTORY = new Jackson3NodeFactory();
 
-    private Jackson3JsonDiff(EnumSet<DiffFlags> flags) {
-        super(flags);
+    private Jackson3JsonDiff(EnumSet<DiffFlags> flags, List<String> identifiers) {
+        super(flags, identifiers);
     }
 
     @Override
@@ -57,6 +57,6 @@ public final class Jackson3JsonDiff extends AbstractJsonDiff {
     public static JsonNode asJson(final JsonNode source, final JsonNode target, EnumSet<DiffFlags> flags) {
         JsonNodeWrapper sourceWrapper = JacksonVersionBridge.wrap(source);
         JsonNodeWrapper targetWrapper = JacksonVersionBridge.wrap(target);
-        return JacksonVersionBridge.unwrap(getJsonNode(sourceWrapper, targetWrapper, new Jackson3JsonDiff(flags), FACTORY));
+        return JacksonVersionBridge.unwrap(getJsonNode(sourceWrapper, targetWrapper, new Jackson3JsonDiff(flags, DEFAULT_IDENTIFIERS), FACTORY));
     }
 }

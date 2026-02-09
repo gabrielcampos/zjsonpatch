@@ -27,11 +27,15 @@ import java.util.*;
  */
 public abstract sealed class AbstractJsonDiff permits Jackson3JsonDiff, JsonDiff {
 
+    protected static final List<String> DEFAULT_IDENTIFIERS = Arrays.asList("id");
+
     private final List<Diff> diffs = new ArrayList<>();
     private final EnumSet<DiffFlags> flags;
+    private final List<String> identifiers;
 
-    protected AbstractJsonDiff(EnumSet<DiffFlags> flags) {
+    protected AbstractJsonDiff(EnumSet<DiffFlags> flags, List<String> identifiers) {
         this.flags = flags.clone();
+        this.identifiers = new ArrayList<>(identifiers);
     }
 
     protected static JsonNodeWrapper getJsonNode(JsonNodeWrapper sourceWrapper, JsonNodeWrapper targetWrapper, AbstractJsonDiff diff, JsonNodeFactoryWrapper factory) {
@@ -198,23 +202,49 @@ public abstract sealed class AbstractJsonDiff permits Jackson3JsonDiff, JsonDiff
                 }
 
                 Diff moveDiff = null;
+                int removeIndex = 0;
                 if (Operation.REMOVE == diff1.getOperation() &&
                         Operation.ADD == diff2.getOperation()) {
                     AbstractJsonPointer relativePath = computeRelativePath(diff2.getPath(), i + 1, j - 1, diffs);
                     moveDiff = new Diff(Operation.MOVE, diff1.getPath(), relativePath);
-
+                    removeIndex = i;
                 } else if (Operation.ADD == diff1.getOperation() &&
                         Operation.REMOVE == diff2.getOperation()) {
                     AbstractJsonPointer relativePath = computeRelativePath(diff2.getPath(), i, j - 1, diffs); // diff1's add should also be considered
                     moveDiff = new Diff(Operation.MOVE, relativePath, diff1.getPath());
+                    removeIndex = j;
                 }
                 if (moveDiff != null) {
                     diffs.remove(j);
                     diffs.set(i, moveDiff);
+
+                    // Adapt remove operation test to move operation test
+                    if (removeIndex > 0 && flags.contains(DiffFlags.EMIT_ARRAY_ITEM_TEST_OPERATIONS)) {
+                        int testIndex = removeIndex - 1;
+                        Diff test = diffs.get(testIndex);
+                        if (test.getOperation() == Operation.TEST) {
+                            AbstractJsonPointer path = mergePaths(test.getPath(), moveDiff.getPath());
+                            test = new Diff(Operation.TEST, path, test.getValue());
+                            diffs.remove(testIndex);
+                            diffs.add(Math.min(i, testIndex), test);
+                        }
+                    }
+
                     break;
                 }
             }
         }
+    }
+
+    private AbstractJsonPointer mergePaths(AbstractJsonPointer testPath, AbstractJsonPointer movePath) {
+        AbstractJsonPointer path = movePath;
+        if (testPath.size() > path.size()) {
+            List<RefToken> tokens = new ArrayList<>(path.decompose());
+            tokens.add(testPath.last());
+            path = createJsonPointerInstance(tokens);
+        }
+
+        return path;
     }
 
     /**
@@ -392,13 +422,19 @@ public abstract sealed class AbstractJsonDiff permits Jackson3JsonDiff, JsonDiff
                 } else if (lcsNode.equals(targetNode)) { //targetNode node is same as lcs, but not src
                     //removal,
                     AbstractJsonPointer currPath = path.append(pos);
-                    if (flags.contains(DiffFlags.EMIT_TEST_OPERATIONS))
+                    if (flags.contains(DiffFlags.EMIT_TEST_OPERATIONS)) {
                         diffs.add(new Diff(Operation.TEST, currPath, srcNode));
+                    } else if (flags.contains(DiffFlags.EMIT_ARRAY_ITEM_TEST_OPERATIONS)) {
+                        addArrayItemTest(currPath, srcNode);
+                    }
                     diffs.add(Diff.generateDiff(Operation.REMOVE, currPath, srcNode));
                     srcIdx++;
                 } else {
                     AbstractJsonPointer currPath = path.append(pos);
                     //both are unequal to lcs node
+                    if (flags.contains(DiffFlags.EMIT_ARRAY_ITEM_TEST_OPERATIONS)) {
+                        addArrayItemTest(currPath, srcNode);
+                    }
                     generateDiffs(currPath, srcNode, targetNode);
                     srcIdx++;
                     targetIdx++;
@@ -411,6 +447,9 @@ public abstract sealed class AbstractJsonDiff permits Jackson3JsonDiff, JsonDiff
             JsonNodeWrapper srcNode = source.get(srcIdx);
             JsonNodeWrapper targetNode = target.get(targetIdx);
             AbstractJsonPointer currPath = path.append(pos);
+            if (flags.contains(DiffFlags.EMIT_ARRAY_ITEM_TEST_OPERATIONS)) {
+                addArrayItemTest(currPath, srcNode);
+            }
             generateDiffs(currPath, srcNode, targetNode);
             srcIdx++;
             targetIdx++;
@@ -420,11 +459,29 @@ public abstract sealed class AbstractJsonDiff permits Jackson3JsonDiff, JsonDiff
         removeRemaining(path, pos, srcIdx, srcSize, source);
     }
 
+    private void addArrayItemTest(AbstractJsonPointer path, JsonNodeWrapper node) {
+        if (node.isObject()) {
+            String field = getIdentifierField(node);
+            if (field != null) {
+                diffs.add(new Diff(Operation.TEST, path.append(field), node.get(field)));
+            }
+        } else {
+            diffs.add(new Diff(Operation.TEST, path, node));
+        }
+    }
+
+    private String getIdentifierField(JsonNodeWrapper node) {
+        return identifiers.stream().filter(i -> node.has(i)).findFirst().orElse(null);
+    }
+
     private void removeRemaining(AbstractJsonPointer path, int pos, int srcIdx, int srcSize, JsonNodeWrapper source) {
         while (srcIdx < srcSize) {
             AbstractJsonPointer currPath = path.append(pos);
-            if (flags.contains(DiffFlags.EMIT_TEST_OPERATIONS))
+            if (flags.contains(DiffFlags.EMIT_TEST_OPERATIONS)) {
                 diffs.add(new Diff(Operation.TEST, currPath, source.get(srcIdx)));
+            } else if (flags.contains(DiffFlags.EMIT_ARRAY_ITEM_TEST_OPERATIONS)) {
+                addArrayItemTest(currPath, source.get(srcIdx));
+            }
             diffs.add(Diff.generateDiff(Operation.REMOVE, currPath, source.get(srcIdx)));
             srcIdx++;
         }
