@@ -16,8 +16,7 @@ public class TestNodesEmissionTest {
     private static EnumSet<DiffFlags> flags;
 
     static {
-        flags = DiffFlags.defaults();
-        flags.add(DiffFlags.EMIT_TEST_OPERATIONS);
+        flags = EnumSet.of(DiffFlags.OMIT_VALUE_ON_REMOVE, DiffFlags.EMIT_TEST_OPERATIONS);
     }
 
     @Test

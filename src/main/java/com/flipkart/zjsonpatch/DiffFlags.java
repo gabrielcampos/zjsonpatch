@@ -61,6 +61,18 @@ public enum DiffFlags {
 
     /**
      * This flag instructs the diff generator to emit {@link Operation#TEST} operations
+     * that validate the state of the source array item document before each mutation.
+     * This can be useful if you want to ensure data integrity prior to applying the patch.
+     * The resulting patches are standard per RFC 6902 and should be processed correctly
+     * by any compliant library; due to the low overhead and the benefits it adds to ensure
+     * data integrity, this is the default behavior.
+     *
+     * @since 0.4.12
+     */
+    EMIT_ARRAY_ITEM_TEST_OPERATIONS,
+
+    /**
+     * This flag instructs the diff generator to emit {@link Operation#TEST} operations
      * that validate the state of the source document before each mutation. This can be
      * useful if you want to ensure data integrity prior to applying the patch.
      * The resulting patches are standard per RFC 6902 and should be processed correctly
@@ -73,7 +85,7 @@ public enum DiffFlags {
 
 
     public static EnumSet<DiffFlags> defaults() {
-        return EnumSet.of(OMIT_VALUE_ON_REMOVE);
+        return EnumSet.of(OMIT_MOVE_OPERATION, OMIT_COPY_OPERATION, OMIT_VALUE_ON_REMOVE, EMIT_ARRAY_ITEM_TEST_OPERATIONS);
     }
 
     public static EnumSet<DiffFlags> dontNormalizeOpIntoMoveAndCopy() {
